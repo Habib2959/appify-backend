@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
+import { Post } from '../feed/post.entity';
 import { User } from '../user/user.entity';
 
 const dataSource = new DataSource({
@@ -9,7 +10,7 @@ const dataSource = new DataSource({
   ssl: {
     rejectUnauthorized: false,
   },
-  entities: [User],
+  entities: [User, Post],
   migrations: ['src/database/migrations/*.ts'],
   synchronize: false,
 });
