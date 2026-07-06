@@ -6,6 +6,7 @@ import { FeedModule } from './feed/feed.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { UploadModule } from './upload/upload.module';
+import { PostLikeModule } from './postLike/post-like.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { UploadModule } from './upload/upload.module';
     UserModule,
     FeedModule,
     UploadModule,
+    PostLikeModule,
   ],
   controllers: [],
   providers: [],

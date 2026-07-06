@@ -5,12 +5,15 @@ import { Repository } from 'typeorm';
 import { CreatePostDto } from './dto/create-post.dto';
 import { GetFeedDto } from './dto/get-feed.dto';
 import { FeedPostResponseDto } from './dto/feed-post-response.dto';
+import { PostLike } from '../postLike/post-like.entity';
 
 @Injectable()
 export class FeedService {
   constructor(
     @InjectRepository(Post)
     private readonly postRepository: Repository<Post>,
+    @InjectRepository(PostLike)
+    private readonly postLikeRepository: Repository<PostLike>,
   ) {}
 
   async createPost(userId: string, dto: CreatePostDto) {
@@ -29,7 +32,10 @@ export class FeedService {
       },
     });
 
-    return this.toFeedPostResponseDto(postWithAuthor);
+    return this.toFeedPostResponseDto(postWithAuthor, {
+      likeCount: 0,
+      likedByMe: false,
+    });
   }
 
   async getFeed(userId: string, query: GetFeedDto) {
@@ -46,8 +52,16 @@ export class FeedService {
       take: limit,
     });
 
+    const postIds = posts.map((post) => post.id);
+    const likeSummaries = await this.getPostLikeSummaries(postIds, userId);
+
     return {
-      items: posts.map((post) => this.toFeedPostResponseDto(post)),
+      items: posts.map((post) =>
+        this.toFeedPostResponseDto(
+          post,
+          likeSummaries.get(post.id) ?? { likeCount: 0, likedByMe: false },
+        ),
+      ),
       pagination: {
         offset,
         limit,
@@ -57,7 +71,10 @@ export class FeedService {
     };
   }
 
-  private toFeedPostResponseDto(post: Post): FeedPostResponseDto {
+  private toFeedPostResponseDto(
+    post: Post,
+    likeSummary: { likeCount: number; likedByMe: boolean },
+  ): FeedPostResponseDto {
     return {
       id: post.id,
       authorId: post.authorId,
@@ -69,8 +86,50 @@ export class FeedService {
       content: post.content,
       media: post.media ?? null,
       isPublic: post.isPublic,
+      likeCount: likeSummary.likeCount,
+      likedByMe: likeSummary.likedByMe,
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
     };
+  }
+
+  private async getPostLikeSummaries(
+    postIds: string[],
+    userId: string,
+  ): Promise<Map<string, { likeCount: number; likedByMe: boolean }>> {
+    if (!postIds.length) {
+      return new Map();
+    }
+
+    const [countRows, likedRows] = await Promise.all([
+      this.postLikeRepository
+        .createQueryBuilder('postLike')
+        .select('postLike.postId', 'postId')
+        .addSelect('COUNT(postLike.id)', 'likeCount')
+        .where('postLike.postId IN (:...postIds)', { postIds })
+        .groupBy('postLike.postId')
+        .getRawMany<{ postId: string; likeCount: string }>(),
+      this.postLikeRepository
+        .createQueryBuilder('postLike')
+        .select('postLike.postId', 'postId')
+        .where('postLike.postId IN (:...postIds)', { postIds })
+        .andWhere('postLike.userId = :userId', { userId })
+        .getRawMany<{ postId: string }>(),
+    ]);
+
+    const likedPostIds = new Set(likedRows.map((row) => row.postId));
+    const likeCountMap = new Map(
+      countRows.map((row) => [row.postId, Number(row.likeCount)]),
+    );
+
+    return new Map(
+      postIds.map((postId) => [
+        postId,
+        {
+          likeCount: likeCountMap.get(postId) ?? 0,
+          likedByMe: likedPostIds.has(postId),
+        },
+      ]),
+    );
   }
 }

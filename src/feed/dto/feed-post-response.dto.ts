@@ -11,6 +11,8 @@ export class FeedPostResponseDto {
   content!: string;
   media!: Array<{ url: string; type: 'image' | 'video' }> | null;
   isPublic!: boolean;
+  likeCount!: number;
+  likedByMe!: boolean;
   createdAt!: Date;
   updatedAt!: Date;
 }
