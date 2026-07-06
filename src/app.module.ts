@@ -3,6 +3,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from './user/user.module';
 import { FeedModule } from './feed/feed.module';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
+import { UploadModule } from './upload/upload.module';
 
 @Module({
   imports: [
@@ -22,8 +25,13 @@ import { FeedModule } from './feed/feed.module';
         synchronize: false,
       }),
     }),
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'uploads'),
+      serveRoot: '/uploads',
+    }),
     UserModule,
     FeedModule,
+    UploadModule,
   ],
   controllers: [],
   providers: [],

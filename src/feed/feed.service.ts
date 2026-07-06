@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Post } from './post.entity';
-import { Repository } from 'typeorm/browser/repository/Repository.js';
+import { Repository } from 'typeorm';
 import { CreatePostDto } from './dto/create-post.dto';
 
 @Injectable()
@@ -15,7 +15,7 @@ export class FeedService {
     const post = this.postRepository.create({
       authorId: userId,
       content: dto.content.trim(),
-      imageUrl: dto.imageUrl ?? null,
+      media: dto.media?.length ? dto.media : null,
       isPublic: dto.isPublic,
     });
     return this.postRepository.save(post);

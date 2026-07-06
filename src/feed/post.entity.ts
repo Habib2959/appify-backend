@@ -24,8 +24,8 @@ export class Post {
   @Column({ type: 'text' })
   content!: string;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
-  imageUrl?: string | null;
+  @Column({ type: 'jsonb', nullable: true })
+  media?: Array<{ url: string; type: 'image' | 'video' }> | null;
 
   @Column({ type: 'boolean', default: false })
   isPublic!: boolean;
