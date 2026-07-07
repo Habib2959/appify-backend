@@ -8,6 +8,7 @@ import { join } from 'path';
 import { UploadModule } from './upload/upload.module';
 import { PostLikeModule } from './postLike/post-like.module';
 import { CommentsModule } from './comments/comments.module';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -37,7 +38,7 @@ import { CommentsModule } from './comments/comments.module';
     PostLikeModule,
     CommentsModule,
   ],
-  controllers: [],
+  controllers: [HealthController],
   providers: [],
 })
 export class AppModule {}
