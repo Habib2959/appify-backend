@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Post } from '../feed/post.entity';
-import { Repository } from 'typeorm';
 import { GetLikersDto } from './dto/get-likers.dto';
 import { PostLikersResponseDto } from './dto/post-likers-response.dto';
 import { PostLikeSummaryDto } from './dto/post-like-summary.dto';
@@ -14,32 +14,71 @@ export class PostLikeService {
     private readonly postLikeRepository: Repository<PostLike>,
     @InjectRepository(Post)
     private readonly postRepository: Repository<Post>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async likePost(userId: string, postId: string): Promise<PostLikeSummaryDto> {
-    await this.getAccessiblePostOrFail(postId, userId);
+    return this.dataSource.transaction(async (manager) => {
+      const postRepository = manager.getRepository(Post);
+      const postLikeRepository = manager.getRepository(PostLike);
+      const post = await this.getAccessiblePostOrFail(
+        postRepository,
+        postId,
+        userId,
+      );
 
-    const existingLike = await this.postLikeRepository.findOne({
-      where: { postId, userId },
+      const existingLike = await postLikeRepository.findOne({
+        where: { postId, userId },
+      });
+
+      if (existingLike) {
+        return {
+          postId,
+          likeCount: post.likeCount,
+          likedByMe: true,
+        };
+      }
+
+      await postLikeRepository.save(
+        postLikeRepository.create({ postId, userId }),
+      );
+      await postRepository.increment({ id: postId }, 'likeCount', 1);
+
+      return {
+        postId,
+        likeCount: post.likeCount + 1,
+        likedByMe: true,
+      };
     });
-
-    if (!existingLike) {
-      const postLike = this.postLikeRepository.create({ postId, userId });
-      await this.postLikeRepository.save(postLike);
-    }
-
-    return this.getPostLikeSummary(postId, userId);
   }
 
   async unlikePost(
     userId: string,
     postId: string,
   ): Promise<PostLikeSummaryDto> {
-    await this.getAccessiblePostOrFail(postId, userId);
+    return this.dataSource.transaction(async (manager) => {
+      const postRepository = manager.getRepository(Post);
+      const postLikeRepository = manager.getRepository(PostLike);
+      const post = await this.getAccessiblePostOrFail(
+        postRepository,
+        postId,
+        userId,
+      );
 
-    await this.postLikeRepository.delete({ postId, userId });
+      const deleteResult = await postLikeRepository.delete({ postId, userId });
 
-    return this.getPostLikeSummary(postId, userId);
+      if (deleteResult.affected) {
+        await postRepository.decrement({ id: postId }, 'likeCount', 1);
+      }
+
+      return {
+        postId,
+        likeCount: deleteResult.affected
+          ? Math.max(0, post.likeCount - 1)
+          : post.likeCount,
+        likedByMe: false,
+      };
+    });
   }
 
   async getLikers(
@@ -47,7 +86,7 @@ export class PostLikeService {
     postId: string,
     query: GetLikersDto,
   ): Promise<PostLikersResponseDto> {
-    await this.getAccessiblePostOrFail(postId, userId);
+    await this.getAccessiblePostOrFail(this.postRepository, postId, userId);
 
     const offset = query.offset ?? 0;
     const limit = query.limit ?? 20;
@@ -87,14 +126,14 @@ export class PostLikeService {
       return new Map();
     }
 
-    const [countRows, likedRows] = await Promise.all([
-      this.postLikeRepository
-        .createQueryBuilder('postLike')
-        .select('postLike.postId', 'postId')
-        .addSelect('COUNT(postLike.id)', 'likeCount')
-        .where('postLike.postId IN (:...postIds)', { postIds })
-        .groupBy('postLike.postId')
-        .getRawMany<{ postId: string; likeCount: string }>(),
+    const [posts, likedRows] = await Promise.all([
+      this.postRepository.find({
+        select: {
+          id: true,
+          likeCount: true,
+        },
+        where: postIds.map((id) => ({ id })),
+      }),
       this.postLikeRepository
         .createQueryBuilder('postLike')
         .select('postLike.postId', 'postId')
@@ -105,7 +144,7 @@ export class PostLikeService {
 
     const likedPostIds = new Set(likedRows.map((row) => row.postId));
     const likeCountMap = new Map(
-      countRows.map((row) => [row.postId, Number(row.likeCount)]),
+      posts.map((post) => [post.id, post.likeCount]),
     );
 
     return new Map(
@@ -124,21 +163,28 @@ export class PostLikeService {
     postId: string,
     userId: string,
   ): Promise<PostLikeSummaryDto> {
-    const summaries = await this.getPostLikeSummaries([postId], userId);
-    const summary = summaries.get(postId);
+    const post = await this.getAccessiblePostOrFail(
+      this.postRepository,
+      postId,
+      userId,
+    );
+    const likedByMe = await this.postLikeRepository.exists({
+      where: { postId, userId },
+    });
 
-    if (!summary) {
-      throw new NotFoundException('Post not found');
-    }
-
-    return summary;
+    return {
+      postId,
+      likeCount: post.likeCount,
+      likedByMe,
+    };
   }
 
   private async getAccessiblePostOrFail(
+    postRepository: Repository<Post>,
     postId: string,
     userId: string,
   ): Promise<Post> {
-    const post = await this.postRepository.findOne({
+    const post = await postRepository.findOne({
       where: [
         { id: postId, isPublic: true },
         { id: postId, authorId: userId },

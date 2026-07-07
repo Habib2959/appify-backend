@@ -3,6 +3,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -10,6 +11,8 @@ import {
 } from 'typeorm';
 
 @Entity({ name: 'post' })
+@Index(['isPublic'])
+@Index(['authorId'])
 export class Post {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -29,6 +32,9 @@ export class Post {
 
   @Column({ type: 'boolean', default: false })
   isPublic!: boolean;
+
+  @Column({ type: 'int', default: 0 })
+  likeCount!: number;
 
   @CreateDateColumn()
   createdAt!: Date;

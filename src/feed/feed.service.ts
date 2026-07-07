@@ -101,25 +101,23 @@ export class FeedService {
       return new Map();
     }
 
-    const [countRows, likedRows] = await Promise.all([
-      this.postLikeRepository
-        .createQueryBuilder('postLike')
-        .select('postLike.postId', 'postId')
-        .addSelect('COUNT(postLike.id)', 'likeCount')
-        .where('postLike.postId IN (:...postIds)', { postIds })
-        .groupBy('postLike.postId')
-        .getRawMany<{ postId: string; likeCount: string }>(),
-      this.postLikeRepository
-        .createQueryBuilder('postLike')
-        .select('postLike.postId', 'postId')
-        .where('postLike.postId IN (:...postIds)', { postIds })
-        .andWhere('postLike.userId = :userId', { userId })
-        .getRawMany<{ postId: string }>(),
-    ]);
+    const likedRows = await this.postLikeRepository
+      .createQueryBuilder('postLike')
+      .select('postLike.postId', 'postId')
+      .where('postLike.postId IN (:...postIds)', { postIds })
+      .andWhere('postLike.userId = :userId', { userId })
+      .getRawMany<{ postId: string }>();
 
     const likedPostIds = new Set(likedRows.map((row) => row.postId));
+    const posts = await this.postRepository.find({
+      select: {
+        id: true,
+        likeCount: true,
+      },
+      where: postIds.map((id) => ({ id })),
+    });
     const likeCountMap = new Map(
-      countRows.map((row) => [row.postId, Number(row.likeCount)]),
+      posts.map((post) => [post.id, post.likeCount]),
     );
 
     return new Map(

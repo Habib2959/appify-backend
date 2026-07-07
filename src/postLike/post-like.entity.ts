@@ -13,6 +13,7 @@ import {
 
 @Entity({ name: 'post_likes' })
 @Index(['postId', 'userId'], { unique: true })
+@Index(['userId'])
 export class PostLike {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
