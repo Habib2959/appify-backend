@@ -87,6 +87,7 @@ export class FeedService {
       media: post.media ?? null,
       isPublic: post.isPublic,
       likeCount: likeSummary.likeCount,
+      commentCount: post.commentCount,
       likedByMe: likeSummary.likedByMe,
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
