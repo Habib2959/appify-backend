@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Controller,
+  InternalServerErrorException,
   Post,
   UploadedFiles,
   UseGuards,
@@ -8,9 +9,8 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '../user/auth.guard';
 import { UploadService, type UploadedFile } from './upload.service';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { extname } from 'path';
 
 @UseGuards(AuthGuard)
 @Controller('upload')
@@ -20,13 +20,7 @@ export class UploadController {
   @Post('media')
   @UseInterceptors(
     FilesInterceptor('media', 10, {
-      storage: diskStorage({
-        destination: './uploads',
-        filename: (_req, file, cb) => {
-          const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-          cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
-        },
-      }),
+      storage: memoryStorage(),
       fileFilter: (_req, file, cb) => {
         const isAllowed =
           file.mimetype.startsWith('image/') ||
@@ -47,6 +41,16 @@ export class UploadController {
     }),
   )
   uploadMedia(@UploadedFiles() files: UploadedFile[]) {
+    if (
+      !process.env.CLOUDINARY_CLOUD_NAME ||
+      !process.env.CLOUDINARY_API_KEY ||
+      !process.env.CLOUDINARY_API_SECRET
+    ) {
+      throw new InternalServerErrorException(
+        'Cloudinary configuration is missing',
+      );
+    }
+
     if (!files || !files.length) {
       throw new BadRequestException('At least one file is required');
     }
